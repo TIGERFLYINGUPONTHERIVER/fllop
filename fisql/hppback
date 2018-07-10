@@ -1,0 +1,245 @@
+#include "../contains/contains.h"
+
+#ifndef     __FISql__H__
+#define     __FISql__H__
+
+/*
+ *
+ *  1.语句操作执行成功返回true，失败返回false
+ *  2.查询语句，查询到的结果，通过string返回
+ *  3.自用简易接口，直接返回int
+ *
+ *  FISql::initFISql(host,user,password,db_name)
+ *
+ *  自封装函数
+ *
+ */
+
+class FISql
+{
+public:
+    FISql();
+    ~FISql();
+    bool        initFISql(string host, string user, string pwd, string db_name);
+    //直接写命令
+    bool        setDatabase(string command);
+
+    string      viewDatabase(string command);
+    string      viewDatabase(unsigned code);        //view present list.
+
+    //返回present_list的code-num   depot_list中的state-total
+    unsigned    viewDatabase(unsigned code, string db_name);
+
+
+    bool        viewAllDatas(string db_name);
+
+    //获取当前时间与最后一次存储时间过了多少天
+    unsigned    FISql_Datediff();
+    
+    //两个库，不一样的处理
+    //  present_list : 读取数量，检索数据，受理所有数据
+    //  depot_list : 读取数量，通过数据库执行函数，
+
+
+private:
+    MYSQL           *connection;
+    MYSQL_ROW       row;
+    MYSQL_RES       *result;
+};
+
+FISql::FISql()
+{
+    connection = mysql_init( NULL );
+}
+
+FISql::~FISql()
+{
+    mysql_close( connection );
+}
+
+bool FISql::initFISql( string host, string user, string pwd, string db_name )
+{
+    if( !mysql_real_connect( connection, host.c_str(), user.c_str(), pwd.c_str(), db_name.c_str(), 0, NULL, 0 ) )
+    {
+        cout << "connect error." << endl;
+        return false;
+    }
+
+    mysql_set_character_set( connection, "utf8" );
+
+    return true;
+}
+
+bool FISql::setDatabase( string command )
+{
+    if( mysql_query( connection, command.c_str() ) )
+    {
+        cout << "query error." << endl;
+        return false;
+    }
+
+    cout << "执行结果:\n" << command << endl;
+
+    return true;
+}
+
+string FISql::viewDatabase( string command )
+{
+    if( mysql_query( connection, command.c_str() ) )
+    {
+        cout << "viewDatabase error." << endl;
+        exit(-1);
+    }
+
+    string str;
+
+    result = mysql_store_result( connection );
+    for( int i=0; i<mysql_field_count(connection); ++i )
+    {
+        row = mysql_fetch_row(result);
+        if( row <= 0 )      break;
+        for( int j=0; j<mysql_num_fields(result); ++j )
+        {
+            str = str + row[j] + ' ';
+//            cout << row[j] << endl;
+            str = str + '\n';
+        }
+        str = str + '\n';
+    }
+
+    mysql_free_result( result );
+
+    return str;
+}
+
+unsigned FISql::viewDatabase( unsigned code, string db_name )
+{
+    string dbstring;
+    if( db_name == "present_list" )
+        dbstring = "select nums from present_list where code = " + to_string(code);
+    else if( code != 0 )
+        dbstring = "select total from depot_list where state = " + to_string(code);
+
+    if( mysql_query( connection, dbstring.c_str() ) )
+    {
+        cout << "viewDatabase error." << endl;
+        exit(-1);
+    }
+
+    int nc = 0;
+    
+    result = mysql_store_result( connection );
+    for(int i=0; i<mysql_field_count(connection); ++i)
+    {
+        row = mysql_fetch_row( result );
+        if( row<=0 )        break;
+        for( int j=0; j<mysql_num_fields(result); ++j )
+        {
+            //提取数字
+            nc = atoi(row[j]);
+        }
+    }
+
+    mysql_free_result( result );
+
+    return nc;
+}
+
+bool FISql::viewAllDatas( string db_name )
+{
+    if( db_name != "present_list" || db_name != "depot_list" )  return false;
+
+    string command = "select * from " + db_name;
+
+    //success return 0, else return !0
+    if( mysql_query( connection, command.c_str() ) )
+    {
+        cout << "viewAllDatas error." << endl;
+        return false;
+    }
+
+    result = mysql_store_result( connection );
+    for( int i=0; i<mysql_field_count(connection); ++i )
+    {
+        row = mysql_fetch_row( result );
+        if( row <= 0 )  break;
+
+        for( int j=0; j<mysql_num_fields(result); ++j )
+        {
+            cout << row[j] << ' ';
+        }
+        cout << '\n';
+    }
+
+    mysql_free_result( result );
+
+    return true;
+}
+
+unsigned FISql::FISql_Datediff()
+{
+    string s = "select datediff((select date from depot_list where state = 1), now())";
+
+    unsigned num = 0;
+
+    if( mysql_query( connection, s.c_str() ) )
+    {
+        cout << " query date error." << endl;
+        exit( -1 );
+    }
+
+    result = mysql_store_result( connection );
+
+    for( int i=0; i<mysql_field_count(connection); ++i )
+    {
+        row = mysql_fetch_row( result );
+        if( row <= 0 )      break;
+
+        for( int j=0; j<mysql_num_fields(result); ++j )
+        {
+            // cmath头文件      fabs() 绝对值 
+            num = num*10 + abs( atoi(row[j]) );
+        }
+    }
+    mysql_free_result( result );
+
+    return num;
+}
+
+string FISql::viewDatabase( unsigned code )
+{
+    // 检索present_list表段数据，返回供显示
+    //
+    string str;
+
+    str = "select * from present_list where code = " + to_string(code);
+
+    if( code != 0 )
+    {
+        if( mysql_query( connection, str.c_str() ))
+        {
+            cout << "query error." << endl;
+            exit( -1 );
+        }
+
+        result = mysql_store_result( connection );
+        for(int i=0; i<mysql_field_count(connection); ++i)
+        {
+            row = mysql_fetch_row( result );
+            if( row <= 0 )      break;
+            for(int j=0; j<mysql_num_fields(result); ++j)
+            {
+                str = str + row[j];
+            }
+            str = str + '\n';
+        }
+
+        mysql_free_result( result );
+
+        return str;
+    }
+    else    exit( -1 );
+}
+
+#endif      //__FISql__H__
+

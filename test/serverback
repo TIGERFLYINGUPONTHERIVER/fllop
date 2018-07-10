@@ -1,0 +1,79 @@
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <arpa/inet.h>
+#include <cstring>
+#include <netinet/in.h>
+#include <errno.h>
+#include <iostream>
+#include <unistd.h>
+
+using namespace std;
+
+#define MAX_MSG_SIZE    256
+#define SERVER_PORT     8221
+
+#define MAX_WAITER      1
+
+int main()
+{
+    int sock_fd, client_fd;
+    
+    struct sockaddr_in ser_addr;
+    struct sockaddr_in cli_addr;
+
+    char msg[MAX_MSG_SIZE];     //接收数据缓冲区
+
+    int ser_sockfd = socket( AF_INET, SOCK_STREAM, 0 );
+    if( ser_sockfd < 0 )
+    {
+        cout << "socket create error." << endl;
+        exit(1);
+    }
+
+    socklen_t addrlen = sizeof( struct sockaddr_in );
+    memset( &ser_addr, '\0', addrlen ); 
+
+    ser_addr.sin_family = AF_INET;
+    ser_addr.sin_port = htons( SERVER_PORT );
+    ser_addr.sin_addr.s_addr = htonl( INADDR_ANY );
+
+    if( bind(ser_sockfd, (struct sockaddr*)&ser_addr, 
+            sizeof(struct sockaddr_in)) < 0 )
+    {
+        cout << "bind error." << endl;
+        exit( -1 );
+    }
+
+    if( listen(ser_sockfd, MAX_WAITER) < 0 )
+    {
+        cout << "listen error." << endl;
+        close( ser_sockfd );
+        //  close socket before exit.
+        exit( -2 );
+    }
+
+    while(1)
+    {
+        int cli_sockfd = accept( ser_sockfd, (struct 
+            sockaddr*)&cli_addr, &addrlen);
+        if( cli_sockfd < 0 )
+        {
+            cout << "Accept Error." << endl;
+        } else {
+            recv( cli_sockfd, msg, (size_t)MAX_MSG_SIZE, 0 );
+            cout << "mesg from :" << inet_ntoa( 
+                cli_addr.sin_addr );
+            cout << "msg:" << msg;
+
+            strcpy( msg, "HEELOWORLD" );
+
+            send( cli_sockfd, msg, sizeof(msg), 0 );
+            close(cli_sockfd);
+        }
+    }
+
+    close(ser_sockfd);
+
+    return 0;
+
+}
